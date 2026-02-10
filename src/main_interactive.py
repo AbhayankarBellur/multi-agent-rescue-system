@@ -21,6 +21,10 @@ def main():
                        help='Random seed for reproducibility')
     parser.add_argument('--max-timesteps', type=int, default=1000,
                        help='Maximum timesteps to run')
+    parser.add_argument('--protocol', choices=['centralized', 'auction', 'coalition', 'hybrid'],
+                       default='hybrid', help='Coordination protocol (default: hybrid)')
+    parser.add_argument('--disable-spawning', action='store_true',
+                       help='Disable dynamic agent spawning')
     
     args = parser.parse_args()
     
@@ -59,6 +63,8 @@ def main():
         print(f"   Hazard Coverage: {config['hazard_coverage']}%")
         print(f"   Random Seed: {args.seed}")
         print(f"   Max Timesteps: {args.max_timesteps}")
+        print(f"   Coordination: {args.protocol.upper()}")
+        print(f"   Dynamic Spawning: {'DISABLED' if args.disable_spawning else 'ENABLED'}")
         print("\n🎮 Controls:")
         print("   SPACE - Pause/Resume")
         print("   R - Reset simulation")
@@ -74,8 +80,12 @@ def main():
     SIMULATION.RANDOM_SEED = args.seed
     SIMULATION.MAX_TIMESTEPS = args.max_timesteps
     
-    # Create and run simulator
-    simulator = Simulator(seed=args.seed)
+    # Create and run simulator with hybrid coordinator
+    simulator = Simulator(
+        seed=args.seed,
+        coordination_mode=args.protocol,
+        enable_spawning=not args.disable_spawning
+    )
     simulator.initialize()
     simulator.run()
 

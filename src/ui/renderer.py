@@ -47,10 +47,29 @@ class Renderer:
         """
         pygame.init()
         
+        # Windows-specific: center the window
+        import os
+        if os.name == 'nt':
+            os.environ['SDL_VIDEO_WINDOW_POS'] = 'center'
+        
         self.window_width = width
         self.window_height = height
         self.screen = pygame.display.set_mode((width, height))
         pygame.display.set_caption("AI Disaster Rescue Simulator")
+        
+        # Show startup message
+        self.screen.fill((30, 30, 40))
+        pygame.font.init()
+        startup_font = pygame.font.SysFont('Arial', 32, bold=True)
+        message_font = pygame.font.SysFont('Arial', 18)
+        
+        title_text = startup_font.render("AI DISASTER RESCUE SIMULATOR", True, (255, 255, 255))
+        msg_text = message_font.render("Initializing simulation...", True, (200, 200, 200))
+        
+        self.screen.blit(title_text, (width//2 - title_text.get_width()//2, height//2 - 40))
+        self.screen.blit(msg_text, (width//2 - msg_text.get_width()//2, height//2 + 20))
+        pygame.display.flip()
+        pygame.time.wait(1000)  # Show for 1 second
         
         # Grid rendering area
         self.grid_width = GRID.WIDTH * GRID.CELL_SIZE

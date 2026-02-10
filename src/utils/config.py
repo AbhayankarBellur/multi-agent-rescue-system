@@ -179,3 +179,4 @@ class ActionType:
     DROP = "drop"
     EXPLORE = "explore"
     WAIT = "wait"
+    SUPPRESS_HAZARD = "suppress_hazard"  # Support agent hazard reduction

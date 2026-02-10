@@ -303,6 +303,209 @@ class CSPAllocator:
         
         return summary
     
+    def allocate_auction(
+        self,
+        agents: Dict[str, Dict],
+        survivors: List[Tuple[int, int]],
+        risk_model,
+        distance_func,
+        communication_network=None,
+        agent_positions=None
+    ) -> Dict[str, List[Tuple[int, int]]]:
+        """
+        Allocate survivors using auction-based Contract Net Protocol.
+        
+        Auction Process:
+        1. For each unassigned survivor, announce task (CFP)
+        2. Agents evaluate task and submit bids
+        3. Select winner based on bid score (cost, capability, risk)
+        4. Award task to winner
+        5. Repeat until all survivors assigned or no valid bids
+        
+        Args:
+            agents: Dictionary of agent_id -> {position, type, current_load, ...}
+            survivors: List of survivor positions
+            risk_model: Bayesian risk model
+            distance_func: Distance computation function
+            communication_network: Optional communication network for messaging
+            agent_positions: Current agent positions for message passing
+            
+        Returns:
+            Dictionary mapping agent_id -> list of assigned survivor positions
+        """
+        from .communication import TaskBid
+        
+        # Filter to rescue agents
+        rescue_agents = {
+            aid: info for aid, info in agents.items()
+            if info.get('type') == 'RESCUE'
+        }
+        
+        if not rescue_agents or not survivors:
+            return {}
+        
+        allocation: Dict[str, List[Tuple[int, int]]] = {
+            aid: [] for aid in rescue_agents.keys()
+        }
+        assigned_survivors: Set[Tuple[int, int]] = set()
+        agent_load: Dict[str, int] = {aid: 0 for aid in rescue_agents.keys()}
+        
+        # Auction each survivor
+        for survivor_pos in survivors:
+            bids: List[TaskBid] = []
+            
+            # Collect bids from all agents
+            for agent_id, agent_info in rescue_agents.items():
+                # Check capacity constraint
+                if agent_load[agent_id] >= self.max_survivors_per_agent:
+                    continue
+                
+                agent_pos = agent_info['position']
+                
+                # Compute bid parameters
+                distance = distance_func(agent_pos, survivor_pos)
+                risk = risk_model.get_risk(survivor_pos, "combined")
+                
+                # Risk constraint check
+                if risk > self.risk_threshold:
+                    continue
+                
+                # Estimate completion time (simplified)
+                expected_time = int(distance) + 10  # Travel + pickup/drop
+                
+                # Create bid
+                bid = TaskBid(
+                    agent_id=agent_id,
+                    task_id=survivor_pos,
+                    cost=distance,
+                    capability=1.0,  # All rescue agents have same capability
+                    risk=risk,
+                    expected_time=expected_time,
+                    current_load=agent_load[agent_id]
+                )
+                
+                bids.append(bid)
+            
+            # No valid bids - skip this survivor (oversubscribed or too risky)
+            if not bids:
+                continue
+            
+            # Select winner (lowest score = best bid)
+            bids.sort(key=lambda b: b.score(self.distance_weight, self.risk_weight))
+            winner = bids[0]
+            
+            # Award task
+            allocation[winner.agent_id].append(survivor_pos)
+            assigned_survivors.add(survivor_pos)
+            agent_load[winner.agent_id] += 1
+        
+        return allocation
+    
+    def allocate_iterative_auction(
+        self,
+        agents: Dict[str, Dict],
+        survivors: List[Tuple[int, int]],
+        risk_model,
+        distance_func,
+        current_allocation: Optional[Dict[str, List[Tuple[int, int]]]] = None
+    ) -> Dict[str, List[Tuple[int, int]]]:
+        """
+        Iterative auction allowing task reallocation.
+        
+        Enables agents to "steal" tasks from others if they can perform
+        better, supporting dynamic reallocation during execution.
+        
+        Args:
+            agents: Available agents
+            survivors: Survivor positions to allocate
+            risk_model: Risk model
+            distance_func: Distance function
+            current_allocation: Existing allocation (for reallocation)
+            
+        Returns:
+            Updated allocation
+        """
+        # Start with current allocation or empty
+        if current_allocation:
+            allocation = {aid: list(tasks) for aid, tasks in current_allocation.items()}
+        else:
+            allocation = {
+                aid: [] for aid, info in agents.items()
+                if info.get('type') == 'RESCUE'
+            }
+        
+        # Build reverse mapping: survivor -> agent
+        survivor_to_agent = {}
+        for agent_id, survivor_list in allocation.items():
+            for survivor_pos in survivor_list:
+                survivor_to_agent[survivor_pos] = agent_id
+        
+        # Iterative improvement
+        improved = True
+        max_iterations = 5
+        iteration = 0
+        
+        while improved and iteration < max_iterations:
+            improved = False
+            iteration += 1
+            
+            for survivor_pos in survivors:
+                current_agent = survivor_to_agent.get(survivor_pos)
+                
+                # Compute current cost/score
+                if current_agent:
+                    current_pos = agents[current_agent]['position']
+                    current_distance = distance_func(current_pos, survivor_pos)
+                    current_risk = risk_model.get_risk(survivor_pos, "combined")
+                    current_score = (self.distance_weight * current_distance +
+                                   self.risk_weight * current_risk * 100)
+                else:
+                    current_score = float('inf')
+                
+                # Check if any agent can do better
+                best_agent = current_agent
+                best_score = current_score
+                
+                for agent_id, agent_info in agents.items():
+                    if agent_info.get('type') != 'RESCUE':
+                        continue
+                    
+                    # Skip if at capacity (unless it's the current agent)
+                    if (agent_id != current_agent and 
+                        len(allocation.get(agent_id, [])) >= self.max_survivors_per_agent):
+                        continue
+                    
+                    agent_pos = agent_info['position']
+                    distance = distance_func(agent_pos, survivor_pos)
+                    risk = risk_model.get_risk(survivor_pos, "combined")
+                    
+                    if risk > self.risk_threshold:
+                        continue
+                    
+                    score = (self.distance_weight * distance +
+                            self.risk_weight * risk * 100)
+                    
+                    # Require significant improvement (10%) to switch
+                    if score < best_score * 0.9:
+                        best_score = score
+                        best_agent = agent_id
+                
+                # Reallocate if better agent found
+                if best_agent != current_agent:
+                    # Remove from current agent
+                    if current_agent and survivor_pos in allocation.get(current_agent, []):
+                        allocation[current_agent].remove(survivor_pos)
+                    
+                    # Add to better agent
+                    if best_agent not in allocation:
+                        allocation[best_agent] = []
+                    allocation[best_agent].append(survivor_pos)
+                    survivor_to_agent[survivor_pos] = best_agent
+                    
+                    improved = True
+        
+        return allocation
+    
     def validate_allocation(
         self,
         allocation: Dict[str, List[Tuple[int, int]]],

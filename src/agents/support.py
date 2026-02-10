@@ -39,6 +39,8 @@ class SupportAgent(BaseAgent):
         # Support-specific state
         self.monitored_agents: Dict[str, Dict] = {}
         self.support_targets: List[Tuple[int, int]] = []
+        self.suppression_cooldown = 0  # Timesteps until can suppress again
+        self.suppression_active_until = {}  # position -> timestep when suppression expires
     
     def decide_action(self, grid, risk_model, **kwargs) -> Optional[Action]:
         """
@@ -124,6 +126,15 @@ class SupportAgent(BaseAgent):
             aid: info for aid, info in other_agents.items()
             if aid != self.agent_id
         }
+        
+        # Update suppression cooldown
+        self.update_suppression_cooldown()
+        
+        # Priority 1: Check if hazard suppression is needed and available
+        timestep = kwargs.get('timestep', 0)
+        suppression_action = self.suppress_local_hazards(grid, risk_model, timestep)
+        if suppression_action:
+            return suppression_action
         
         # Check if need to replan
         current_state = {'survivor_positions': set(grid.survivor_positions)}
@@ -321,6 +332,120 @@ class SupportAgent(BaseAgent):
         risky.sort(key=lambda pos: abs(pos[0] - self.position[0]) + abs(pos[1] - self.position[1]))
         
         return risky[:5]  # Top 5
+    
+    def can_suppress_hazard(self, timestep: int) -> bool:
+        """
+        Check if support agent can suppress hazards.
+        
+        Args:
+            timestep: Current timestep
+            
+        Returns:
+            True if suppression is available
+        """
+        return self.suppression_cooldown <= 0
+    
+    def suppress_local_hazards(self, grid, risk_model, timestep: int) -> Optional[Action]:
+        """
+        Suppress hazards in local area to assist rescue operations.
+        
+        Effect: Reduces risk by 0.3 in 3x3 area around agent for 5 timesteps.
+        Cooldown: 10 timesteps between uses.
+        
+        Args:
+            grid: Environment grid
+            risk_model: Risk model
+            timestep: Current timestep
+            
+        Returns:
+            SUPPRESS_HAZARD action if conditions met, else None
+        """
+        # Check cooldown
+        if self.suppression_cooldown > 0:
+            return None
+        
+        # Check if there are nearby rescue agents or survivors that need help
+        x, y = self.position
+        neighbors = grid.get_neighbors(x, y, diagonal=True)
+        
+        # Check for high-risk area
+        local_risk = risk_model.get_risk(self.position, "combined")
+        
+        # Only suppress if risk is significant
+        if local_risk < 0.4:
+            return None
+        
+        # Check for nearby rescue agents in coalition
+        needs_suppression = False
+        for agent_id, agent_info in self.monitored_agents.items():
+            if agent_info.get('type') == AgentType.RESCUE:
+                agent_pos = agent_info.get('position')
+                if agent_pos:
+                    dist = abs(agent_pos[0] - x) + abs(agent_pos[1] - y)
+                    if dist <= 3:  # Within suppression range
+                        needs_suppression = True
+                        break
+        
+        # Also check for nearby survivors
+        if not needs_suppression:
+            for sx, sy in neighbors:
+                cell = grid.get_cell(sx, sy)
+                if cell and cell.has_survivor:
+                    needs_suppression = True
+                    break
+        
+        if needs_suppression:
+            self.logger.log_action(
+                self.agent_id,
+                "SUPPRESS_HAZARD",
+                f"Suppressing hazards at {self.position} for 5 timesteps (risk: {local_risk:.2f})"
+            )
+            
+            # Mark suppression area and duration
+            for nx, ny in [(x, y)] + list(neighbors):
+                self.suppression_active_until[(nx, ny)] = timestep + 5
+            
+            # Set cooldown
+            self.suppression_cooldown = 10
+            
+            return Action(
+                type=ActionType.SUPPRESS_HAZARD,
+                parameters={
+                    'position': self.position,
+                    'radius': 1,
+                    'duration': 5,
+                    'risk_reduction': 0.3
+                },
+                preconditions=[f"At {self.position}", f"Risk >= 0.4"],
+                effects=["Local hazards suppressed", "Risk reduced by 0.3"],
+                cost=1.0
+            )
+        
+        return None
+    
+    def update_suppression_cooldown(self):
+        """Reduce suppression cooldown each timestep."""
+        if self.suppression_cooldown > 0:
+            self.suppression_cooldown -= 1
+    
+    def get_active_suppression_at(self, position: Tuple[int, int], timestep: int) -> float:
+        """
+        Get active hazard suppression effect at position.
+        
+        Args:
+            position: Position to check
+            timestep: Current timestep
+            
+        Returns:
+            Risk reduction amount (0.0 to 0.3)
+        """
+        if position in self.suppression_active_until:
+            if timestep <= self.suppression_active_until[position]:
+                return 0.3
+            else:
+                # Suppression expired
+                del self.suppression_active_until[position]
+        return 0.0
     
     def _generate_patrol_action(self, grid, risk_model) -> Action:
         """

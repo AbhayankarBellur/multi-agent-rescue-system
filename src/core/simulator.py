@@ -25,9 +25,12 @@ from ..agents.rescue import RescueAgent
 from ..agents.support import SupportAgent
 from ..ai.bayesian_risk import BayesianRiskModel
 from ..ai.csp_allocator import CSPAllocator
+from ..ai.coordinator import HybridCoordinator, CoordinationMode
+from ..ai.communication import CommunicationNetwork
+from ..ai.dynamic_spawner import DynamicSpawner
 from ..data.scenarios import ScenarioGenerator
 from ..utils.logger import get_logger, reset_logger
-from ..utils.config import SIMULATION, GRID, UI
+from ..utils.config import SIMULATION, GRID, UI, ActionType
 from ..ui.renderer import Renderer
 
 
@@ -43,17 +46,32 @@ class Simulator:
     - Handle UI and user input
     """
     
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None, coordination_mode: Optional[str] = None, enable_spawning: bool = True):
         """
         Initialize simulator.
         
         Args:
             seed: Random seed for determinism
+            coordination_mode: Force coordination mode ('centralized', 'auction', 'coalition', 'hybrid'/None)
+            enable_spawning: Enable dynamic agent spawning
         """
         self.seed = seed or SIMULATION.RANDOM_SEED
         self.timestep = 0
         self.paused = False
         self.running = True
+        self.enable_spawning = enable_spawning
+        
+        # Parse coordination mode
+        if coordination_mode:
+            mode_map = {
+                'centralized': CoordinationMode.CENTRALIZED,
+                'auction': CoordinationMode.AUCTION,
+                'coalition': CoordinationMode.COALITION,
+                'hybrid': None
+            }
+            self.force_mode = mode_map.get(coordination_mode.lower(), None)
+        else:
+            self.force_mode = None
         
         # Initialize logger
         reset_logger()
@@ -64,7 +82,13 @@ class Simulator:
         self.agents: List = []
         self.risk_model = None
         self.csp_allocator = None
+        self.coordinator = None  # Hybrid coordinator
+        self.comm_network = None  # Communication network
+        self.spawner = None  # Dynamic agent spawner
         self.renderer = None
+        
+        # Track allocation for reallocation
+        self.current_allocation = {}
         
         # Metrics
         self.total_survivors_rescued = 0
@@ -114,6 +138,34 @@ class Simulator:
         
         # Initialize CSP allocator
         self.csp_allocator = CSPAllocator()
+        
+        # Initialize communication network
+        self.comm_network = CommunicationNetwork(
+            communication_range=15.0,
+            enable_broadcast=True
+        )
+        
+        # Initialize hybrid coordinator
+        self.coordinator = HybridCoordinator(
+            self.csp_allocator,
+            self.comm_network
+        )
+        
+        # Initialize dynamic spawner
+        if self.enable_spawning:
+            self.spawner = DynamicSpawner(max_agents=20)
+        
+        # Inject communication network into agents
+        for agent in self.agents:
+            agent.set_communication_network(self.comm_network)
+            self.comm_network.register_agent(agent.get_numeric_id())
+        
+        # Log coordination mode
+        if self.force_mode:
+            mode_name = self.force_mode.value.upper()
+            self.logger.log_metric("Coordinator mode", f"{mode_name} (forced)")
+        else:
+            self.logger.log_metric("Coordinator mode", "HYBRID (auto-select)")
         
         # Initialize renderer
         self.renderer = Renderer(UI.WINDOW_WIDTH, UI.WINDOW_HEIGHT)
@@ -183,6 +235,35 @@ class Simulator:
         # 1. Propagate hazards
         self.grid.propagate_hazards()
         
+        # Update communication network timestep
+        self.comm_network.advance_timestep()
+        
+        # Get current survivor positions (needed for spawning and coordination)
+        survivors = list(self.grid.survivor_positions)
+        
+        # Dynamic agent spawning (if enabled)
+        if self.spawner:
+            spawn_type = self.spawner.evaluate_spawning_needs(
+                self.agents,
+                self.grid,
+                survivors,
+                self.timestep
+            )
+            
+            if spawn_type:
+                new_agent = self.spawner.spawn_agent(
+                    spawn_type,
+                    self.grid,
+                    self.comm_network
+                )
+                
+                if new_agent:
+                    self.agents.append(new_agent)
+                    self.logger.log_metric(
+                        f"T{self.timestep} Agent Spawned",
+                        f"{new_agent.agent_id} ({spawn_type}) at {new_agent.position}"
+                    )
+        
         # 2. Update risk probabilities for all agents
         for agent in self.agents:
             observations = agent.perceive(self.grid, self.risk_model)
@@ -201,51 +282,92 @@ class Simulator:
                 risk_values
             )
         
-        # 3. Assign tasks via CSP (for rescue agents)
+        # 3. Assign tasks via HYBRID COORDINATOR
         agent_info = {
             agent.agent_id: {
                 'position': agent.position,
                 'type': agent.agent_type,
                 'current_load': len(agent.assigned_tasks),
-                'carrying': agent.carrying_survivor
+                'carrying': agent.carrying_survivor,
+                'explored_cells': agent.explored_cells
             }
             for agent in self.agents
         }
         
-        survivors = list(self.grid.survivor_positions)
-        
         if survivors:
-            allocation = self.csp_allocator.allocate(
+            # Assess environment for protocol selection
+            assessment = self.coordinator.assess_environment(
+                self.risk_model,
+                survivors,
+                agent_info,
+                self.grid
+            )
+            
+            # Select coordination mode
+            selected_mode = self.coordinator.select_mode(
+                assessment,
+                self.timestep,
+                force_mode=self.force_mode
+            )
+            
+            # Allocate tasks using selected protocol
+            allocation = self.coordinator.allocate_tasks(
+                selected_mode,
                 agent_info,
                 survivors,
                 self.risk_model,
-                lambda p1, p2: abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
+                lambda p1, p2: abs(p1[0] - p2[0]) + abs(p1[1] - p2[1]),
+                current_allocation=self.current_allocation
             )
             
+            # Store for reallocation
+            self.current_allocation = allocation
+            
+            # Log coordination details
             self.logger.log_task_allocation(allocation)
+            if self.timestep % 10 == 0:  # Log mode every 10 timesteps
+                self.logger.log_metric(
+                    f"T{self.timestep} Coord Mode",
+                    f"{selected_mode.value} (risk={assessment.avg_risk:.2f}, uncertainty={assessment.uncertainty_level()})"
+                )
         else:
             allocation = {}
+            self.current_allocation = {}
         
         # 4. Generate plans and execute actions for each agent
         for agent in self.agents:
-            # Decide action
+            # Decide action (pass timestep for suppression)
             action = agent.decide_action(
                 self.grid,
                 self.risk_model,
                 allocation=allocation,
-                agents=agent_info
+                agents=agent_info,
+                timestep=self.timestep
             )
             
             if action:
-                # Execute action
-                success, result = agent.execute_action(action, self.grid)
-                
-                self.logger.log_action(
-                    agent.agent_id,
-                    str(action),
-                    agent.position,
-                    result
-                )
+                # Handle SUPPRESS_HAZARD action (support agent special action)
+                if action.type == ActionType.SUPPRESS_HAZARD:
+                    # Support agent tracks suppression internally
+                    # Just log the action
+                    self.logger.log_action(
+                        agent.agent_id,
+                        "SUPPRESS_HAZARD",
+                        agent.position,
+                        f"Suppressing hazards in 3x3 area for 5 timesteps (reduction: 0.3)"
+                    )
+                    success = True
+                    result = "Hazard suppression active"
+                else:
+                    # Execute normal action
+                    success, result = agent.execute_action(action, self.grid)
+                    
+                    self.logger.log_action(
+                        agent.agent_id,
+                        str(action),
+                        agent.position,
+                        result
+                    )
                 
                 # Update metrics
                 if agent.agent_type == "RESCUE":
@@ -287,6 +409,16 @@ class Simulator:
         self.logger._write("\n" + "="*80, "MINIMAL")
         self.logger._write("AGENT PERFORMANCE", "MINIMAL")
         self.logger._write("="*80, "MINIMAL")
+        
+        if self.spawner:
+            spawn_stats = self.spawner.get_spawn_stats()
+            if spawn_stats['total_spawned'] > 0:
+                self.logger._write(f"\nDynamic Spawning: {spawn_stats['total_spawned']} agents spawned", "MINIMAL")
+                self.logger._write(f"  Explorers: {spawn_stats['explorers_spawned']}", "MINIMAL")
+                self.logger._write(f"  Rescue: {spawn_stats['rescue_spawned']}", "MINIMAL")
+                self.logger._write(f"  Support: {spawn_stats['support_spawned']}", "MINIMAL")
+        
+        self.logger._write(f"\nFinal agent count: {len(self.agents)}", "MINIMAL")
         
         for agent in self.agents:
             state = agent.get_state()

@@ -69,6 +69,11 @@ class BaseAgent(ABC):
         }
         self.explored_cells: set = set()
         
+        # Communication system (injected by simulator)
+        self.communication_network = None
+        self.pending_messages: List[Any] = []
+        self.coalition_members: List[int] = []  # IDs of agents in same coalition
+        
         self.logger = get_logger()
     
     def perceive(self, grid, risk_model) -> Dict[str, Any]:
@@ -303,7 +308,59 @@ class BaseAgent(ABC):
             'cells_explored': self.cells_explored,
             'current_plan_length': len(self.current_plan),
             'assigned_tasks': len(self.assigned_tasks),
+            'coalition_size': len(self.coalition_members),
+            'pending_messages': len(self.pending_messages),
         }
+    
+    def set_communication_network(self, network):
+        """
+        Inject communication network into agent.
+        
+        Args:
+            network: CommunicationNetwork instance
+        """
+        self.communication_network = network
+    
+    def send_message(self, message, agent_positions: Dict[int, Tuple[int, int]]):
+        """
+        Send a message through the communication network.
+        
+        Args:
+            message: Message object to send
+            agent_positions: Current positions of all agents
+        """
+        if self.communication_network:
+            self.communication_network.send_message(message, agent_positions)
+    
+    def receive_messages(self, msg_type=None):
+        """
+        Retrieve messages from communication network.
+        
+        Args:
+            msg_type: Optional filter for message type
+            
+        Returns:
+            List of messages
+        """
+        if self.communication_network:
+            messages = self.communication_network.receive_messages(
+                int(self.agent_id.split('_')[1]) if '_' in self.agent_id else 0,
+                msg_type
+            )
+            self.pending_messages = messages
+            return messages
+        return []
+    
+    def get_numeric_id(self) -> int:
+        """
+        Extract numeric ID from agent_id string.
+        
+        Returns:
+            Integer agent ID
+        """
+        if '_' in self.agent_id:
+            return int(self.agent_id.split('_')[1])
+        return 0
     
     def __repr__(self) -> str:
         return f"{self.agent_type}Agent({self.agent_id}) at {self.position}"

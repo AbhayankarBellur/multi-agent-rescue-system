@@ -49,6 +49,19 @@ def main():
         help='Logging detail level (default: NORMAL)'
     )
     
+    parser.add_argument(
+        '--protocol',
+        choices=['centralized', 'auction', 'coalition', 'hybrid'],
+        default='hybrid',
+        help='Coordination protocol: centralized (CSP greedy), auction (CNP), coalition (teams), hybrid (auto-select) (default: hybrid)'
+    )
+    
+    parser.add_argument(
+        '--disable-spawning',
+        action='store_true',
+        help='Disable dynamic agent spawning (enabled by default)'
+    )
+    
     args = parser.parse_args()
     
     # Update configuration
@@ -67,6 +80,8 @@ def main():
     print(f"  Random Seed: {args.seed}")
     print(f"  Max Timesteps: {args.max_timesteps}")
     print(f"  Log Level: {args.log_level}")
+    print(f"  Coordination Protocol: {args.protocol.upper()}")
+    print(f"  Dynamic Spawning: {'DISABLED' if args.disable_spawning else 'ENABLED'}")
     print("="*80)
     print("\nControls:")
     print("  SPACE - Pause/Resume")
@@ -79,7 +94,11 @@ def main():
     
     try:
         # Create and initialize simulator
-        simulator = Simulator(seed=args.seed)
+        simulator = Simulator(
+            seed=args.seed,
+            coordination_mode=args.protocol,
+            enable_spawning=not args.disable_spawning
+        )
         simulator.initialize()
         
         print("Simulation ready. Starting...\n")

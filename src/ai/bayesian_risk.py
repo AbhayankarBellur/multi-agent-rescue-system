@@ -296,3 +296,194 @@ class BayesianRiskModel:
             grad_y /= magnitude
         
         return (grad_x, grad_y)
+    
+    def predict_risk(
+        self,
+        position: Tuple[int, int],
+        timesteps_ahead: int,
+        grid,
+        hazard_spread_enabled: bool = True
+    ) -> float:
+        """
+        Predict future risk at position using temporal forecasting.
+        
+        Implements true Bayesian temporal prediction:
+        P(hazard_t+n | observed_t) = Σ P(hazard_t+n | state_t+n-1) P(state_t+n-1 | observed_t)
+        
+        Args:
+            position: Cell to predict risk for
+            timesteps_ahead: Number of timesteps to predict forward
+            grid: Grid object for neighbor information
+            hazard_spread_enabled: Whether hazards are spreading
+            
+        Returns:
+            Predicted risk probability [0.0, 1.0]
+        """
+        if timesteps_ahead <= 0:
+            return self.get_risk(position, "combined")
+        
+        if not hazard_spread_enabled:
+            # Static environment - current risk is future risk
+            return self.get_risk(position, "combined")
+        
+        # Get current risk
+        current_fire = self.fire_risk.get(position, self.prior_fire)
+        current_flood = self.flood_risk.get(position, self.prior_flood)
+        
+        # Predict fire spread using Monte Carlo simulation (simplified)
+        predicted_fire = self._predict_fire_spread(position, timesteps_ahead, grid)
+        predicted_flood = self._predict_flood_spread(position, timesteps_ahead, grid)
+        predicted_collapse = self._predict_collapse(position, timesteps_ahead, predicted_fire)
+        
+        # Combined future risk
+        future_risk = 1.0 - (1.0 - predicted_fire) * (1.0 - predicted_flood) * (1.0 - predicted_collapse)
+        
+        return future_risk
+    
+    def _predict_fire_spread(self, position: Tuple[int, int], timesteps: int, grid) -> float:
+        """
+        Predict fire risk using spread model.
+        
+        Uses Bayes theorem:
+        P(fire at position | neighbors have fire) = 
+            P(neighbors have fire | position has fire) × P(position has fire) / P(neighbors)
+        
+        Simplified to: spread_probability^timesteps based on neighbor fires
+        
+        Args:
+            position: Target position
+            timesteps: Timesteps ahead
+            grid: Grid object
+            
+        Returns:
+            Predicted fire probability
+        """
+        x, y = position
+        
+        # Check if already on fire
+        cell = grid.get_cell(x, y)
+        if cell and cell.has_fire:
+            return 1.0
+        if cell and cell.has_flood:
+            return 0.0  # Incompatible
+        
+        # Get neighbors
+        neighbors = grid.get_neighbors(x, y, diagonal=False)
+        neighbor_cells = [grid.get_cell(nx, ny) for nx, ny in neighbors]
+        neighbor_cells = [c for c in neighbor_cells if c is not None]
+        
+        # Count fire neighbors
+        fire_neighbors = sum(1 for c in neighbor_cells if c.has_fire)
+        
+        if fire_neighbors == 0:
+            # No immediate threat - use current risk
+            return self.fire_risk.get(position, self.prior_fire)
+        
+        # Bayesian update: P(fire_t+n | fire_neighbors_t)
+        # Probability of fire spreading over n timesteps
+        spread_per_timestep = HAZARD.FIRE_SPREAD_RATE * 0.3 * fire_neighbors  # Per neighbor
+        
+        # Compound probability over timesteps
+        # P(eventually catch fire) = 1 - P(never catch fire)^timesteps
+        prob_no_fire_per_step = (1.0 - spread_per_timestep)
+        prob_no_fire_n_steps = prob_no_fire_per_step ** timesteps
+        predicted_fire = 1.0 - prob_no_fire_n_steps
+        
+        # Combine with current belief
+        current = self.fire_risk.get(position, self.prior_fire)
+        return max(current, predicted_fire)
+    
+    def _predict_flood_spread(self, position: Tuple[int, int], timesteps: int, grid) -> float:
+        """
+        Predict flood risk over time.
+        
+        Args:
+            position: Target position
+            timesteps: Timesteps ahead
+            grid: Grid object
+            
+        Returns:
+            Predicted flood probability
+        """
+        x, y = position
+        
+        cell = grid.get_cell(x, y)
+        if cell and cell.has_flood:
+            return 1.0
+        if cell and cell.has_fire:
+            return 0.0  # Fire prevents flooding
+        
+        neighbors = grid.get_neighbors(x, y, diagonal=False)
+        neighbor_cells = [grid.get_cell(nx, ny) for nx, ny in neighbors]
+        neighbor_cells = [c for c in neighbor_cells if c is not None]
+        
+        flood_neighbors = sum(1 for c in neighbor_cells if c.has_flood)
+        
+        if flood_neighbors == 0:
+            return self.flood_risk.get(position, self.prior_flood)
+        
+        # Slower spread than fire
+        spread_per_timestep = HAZARD.FLOOD_SPREAD_RATE * 0.2 * flood_neighbors
+        prob_no_flood_n_steps = (1.0 - spread_per_timestep) ** timesteps
+        predicted_flood = 1.0 - prob_no_flood_n_steps
+        
+        current = self.flood_risk.get(position, self.prior_flood)
+        return max(current, predicted_flood)
+    
+    def _predict_collapse(self, position: Tuple[int, int], timesteps: int, fire_risk: float) -> float:
+        """
+        Predict collapse risk based on predicted fire exposure.
+        
+        Args:
+            position: Target position
+            timesteps: Timesteps ahead
+            fire_risk: Predicted fire risk at this position
+            
+        Returns:
+            Predicted collapse probability
+        """
+        # Collapse probability increases with fire exposure over time
+        collapse_per_timestep = HAZARD.DEBRIS_GENERATION_NEAR_FIRE * fire_risk
+        prob_no_collapse_n_steps = (1.0 - collapse_per_timestep) ** timesteps
+        predicted_collapse = 1.0 - prob_no_collapse_n_steps
+        
+        current = self.collapse_risk.get(position, self.prior_collapse)
+        return max(current, predicted_collapse)
+    
+    def get_safe_path_probability(
+        self,
+        path: list[Tuple[int, int]],
+        timesteps_to_traverse: int,
+        grid
+    ) -> float:
+        """
+        Compute probability that a path remains safe during traversal.
+        
+        Args:
+            path: List of positions in path
+            timesteps_to_traverse: Time needed to traverse path
+            grid: Grid object
+            
+        Returns:
+            Probability path stays safe [0.0, 1.0]
+        """
+        if not path:
+            return 1.0
+        
+        # For each step in path, predict risk when agent will be there
+        prob_safe = 1.0
+        
+        for i, pos in enumerate(path):
+            # When will agent be at this position?
+            timestep_at_pos = i
+            
+            # What's the risk at that future time?
+            future_risk = self.predict_risk(pos, timestep_at_pos, grid, hazard_spread_enabled=True)
+            
+            # Probability this step is safe
+            prob_safe_step = 1.0 - future_risk
+            
+            # Overall safety = product of individual step safeties
+            prob_safe *= prob_safe_step
+        
+        return prob_safe
