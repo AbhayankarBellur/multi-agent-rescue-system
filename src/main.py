@@ -62,6 +62,13 @@ def main():
         help='Disable dynamic agent spawning (enabled by default)'
     )
     
+    parser.add_argument(
+        '--difficulty',
+        choices=['easy', 'medium', 'hard', 'extreme', 'nightmare'],
+        default=None,
+        help='Scenario difficulty level (overrides default grid/hazard settings)'
+    )
+    
     args = parser.parse_args()
     
     # Update configuration
@@ -82,6 +89,8 @@ def main():
     print(f"  Log Level: {args.log_level}")
     print(f"  Coordination Protocol: {args.protocol.upper()}")
     print(f"  Dynamic Spawning: {'DISABLED' if args.disable_spawning else 'ENABLED'}")
+    if args.difficulty:
+        print(f"  Difficulty: {args.difficulty.upper()}")
     print("="*80)
     print("\nControls:")
     print("  SPACE - Pause/Resume")
@@ -97,7 +106,8 @@ def main():
         simulator = Simulator(
             seed=args.seed,
             coordination_mode=args.protocol,
-            enable_spawning=not args.disable_spawning
+            enable_spawning=not args.disable_spawning,
+            difficulty=args.difficulty
         )
         simulator.initialize()
         

@@ -263,3 +263,310 @@ class ScenarioGenerator:
         # Add debris
         for x, y in scenario['debris']:
             grid.add_debris(x, y)
+
+    def generate_high_risk_scenario(self, grid_size: Tuple[int, int] = (40, 40)) -> dict:
+        """
+        Generate HIGH-RISK scenario to force mode switching.
+        
+        Parameters designed to trigger auction and coalition modes:
+        - 40×40 grid (larger area)
+        - 15 survivors (high workload)
+        - 35% hazard density (high risk)
+        - Aggressive hazard spreading
+        
+        Args:
+            grid_size: Grid dimensions (width, height)
+            
+        Returns:
+            High-risk scenario dictionary
+        """
+        width, height = grid_size
+        total_cells = width * height
+        hazard_density = 0.35  # 35% coverage
+        
+        # Calculate hazard counts
+        total_hazards = int(total_cells * hazard_density)
+        num_fires = total_hazards // 3
+        num_floods = total_hazards // 3
+        num_debris = total_hazards - num_fires - num_floods
+        
+        # Safe zones
+        safe_zones = [
+            (3, 3),
+            (width - 4, 3),
+            (3, height - 4),
+            (width - 4, height - 4)
+        ]
+        
+        # Survivors - distributed across grid
+        survivors = []
+        for i in range(15):
+            x = random.randint(8, width - 9)
+            y = random.randint(8, height - 9)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors:
+                survivors.append(pos)
+        
+        # Fires - clustered for high risk
+        fires = []
+        for i in range(num_fires):
+            x = random.randint(5, width - 6)
+            y = random.randint(5, height - 6)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors:
+                fires.append(pos)
+        
+        # Floods
+        floods = []
+        for i in range(num_floods):
+            x = random.randint(5, width - 6)
+            y = random.randint(5, height - 6)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors and pos not in fires:
+                floods.append(pos)
+        
+        # Debris
+        debris = []
+        for i in range(num_debris):
+            x = random.randint(5, width - 6)
+            y = random.randint(5, height - 6)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors:
+                debris.append(pos)
+        
+        # Agent positions
+        agent_positions = {
+            'explorer': (5, 3),
+            'rescue': (3, 5),
+            'support': (4, 4)
+        }
+        
+        return {
+            'width': width,
+            'height': height,
+            'safe_zones': safe_zones,
+            'survivors': survivors,
+            'fires': fires,
+            'floods': floods,
+            'debris': debris,
+            'agent_positions': agent_positions,
+            'seed': self.seed,
+            'difficulty': 'high',
+            'hazard_density': hazard_density
+        }
+    
+    def generate_extreme_scenario(self, grid_size: Tuple[int, int] = (60, 60)) -> dict:
+        """
+        Generate EXTREME scenario for stress testing.
+        
+        Parameters:
+        - 60×60 grid
+        - 25 survivors
+        - 40% hazard density
+        - Maximum challenge
+        
+        Args:
+            grid_size: Grid dimensions
+            
+        Returns:
+            Extreme scenario dictionary
+        """
+        width, height = grid_size
+        total_cells = width * height
+        hazard_density = 0.40  # 40% coverage
+        
+        total_hazards = int(total_cells * hazard_density)
+        num_fires = total_hazards // 3
+        num_floods = total_hazards // 3
+        num_debris = total_hazards - num_fires - num_floods
+        
+        # Safe zones
+        safe_zones = [
+            (3, 3),
+            (width - 4, 3),
+            (3, height - 4),
+            (width - 4, height - 4),
+            (width // 2, 3),  # Extra safe zone
+            (width // 2, height - 4)
+        ]
+        
+        # Survivors
+        survivors = []
+        for i in range(25):
+            x = random.randint(10, width - 11)
+            y = random.randint(10, height - 11)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors:
+                survivors.append(pos)
+        
+        # Hazards - dense placement
+        fires = []
+        for i in range(num_fires):
+            x = random.randint(5, width - 6)
+            y = random.randint(5, height - 6)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors:
+                fires.append(pos)
+        
+        floods = []
+        for i in range(num_floods):
+            x = random.randint(5, width - 6)
+            y = random.randint(5, height - 6)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors and pos not in fires:
+                floods.append(pos)
+        
+        debris = []
+        for i in range(num_debris):
+            x = random.randint(5, width - 6)
+            y = random.randint(5, height - 6)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors:
+                debris.append(pos)
+        
+        agent_positions = {
+            'explorer': (5, 3),
+            'rescue': (3, 5),
+            'support': (4, 4)
+        }
+        
+        return {
+            'width': width,
+            'height': height,
+            'safe_zones': safe_zones,
+            'survivors': survivors,
+            'fires': fires,
+            'floods': floods,
+            'debris': debris,
+            'agent_positions': agent_positions,
+            'seed': self.seed,
+            'difficulty': 'extreme',
+            'hazard_density': hazard_density
+        }
+    
+    def generate_scenario_by_difficulty(self, difficulty: str = 'medium') -> dict:
+        """
+        Generate scenario based on difficulty level.
+        
+        Args:
+            difficulty: One of 'easy', 'medium', 'hard', 'extreme', 'nightmare'
+            
+        Returns:
+            Scenario dictionary
+        """
+        if difficulty == 'easy':
+            # Small grid, few survivors, low hazards
+            return self._generate_custom_scenario(
+                grid_size=(20, 20),
+                num_survivors=5,
+                hazard_density=0.10
+            )
+        
+        elif difficulty == 'medium':
+            # Standard scenario
+            return self.generate_standard_scenario()
+        
+        elif difficulty == 'hard':
+            # High-risk scenario
+            return self.generate_high_risk_scenario()
+        
+        elif difficulty == 'extreme':
+            # Extreme scenario
+            return self.generate_extreme_scenario()
+        
+        elif difficulty == 'nightmare':
+            # Maximum difficulty
+            return self._generate_custom_scenario(
+                grid_size=(80, 80),
+                num_survivors=40,
+                hazard_density=0.45
+            )
+        
+        else:
+            # Default to medium
+            return self.generate_standard_scenario()
+    
+    def _generate_custom_scenario(self, grid_size: Tuple[int, int],
+                                  num_survivors: int,
+                                  hazard_density: float) -> dict:
+        """
+        Generate custom scenario with specific parameters.
+        
+        Args:
+            grid_size: Grid dimensions
+            num_survivors: Number of survivors
+            hazard_density: Hazard coverage (0.0-0.5)
+            
+        Returns:
+            Custom scenario dictionary
+        """
+        width, height = grid_size
+        total_cells = width * height
+        total_hazards = int(total_cells * hazard_density)
+        
+        num_fires = total_hazards // 3
+        num_floods = total_hazards // 3
+        num_debris = total_hazards - num_fires - num_floods
+        
+        # Safe zones
+        margin = max(3, width // 20)
+        safe_zones = [
+            (margin, margin),
+            (width - margin - 1, margin),
+            (margin, height - margin - 1),
+            (width - margin - 1, height - margin - 1)
+        ]
+        
+        # Survivors
+        survivors = []
+        for i in range(num_survivors):
+            x = random.randint(margin + 2, width - margin - 3)
+            y = random.randint(margin + 2, height - margin - 3)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors:
+                survivors.append(pos)
+        
+        # Hazards
+        fires = []
+        for i in range(num_fires):
+            x = random.randint(margin, width - margin - 1)
+            y = random.randint(margin, height - margin - 1)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors:
+                fires.append(pos)
+        
+        floods = []
+        for i in range(num_floods):
+            x = random.randint(margin, width - margin - 1)
+            y = random.randint(margin, height - margin - 1)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors and pos not in fires:
+                floods.append(pos)
+        
+        debris = []
+        for i in range(num_debris):
+            x = random.randint(margin, width - margin - 1)
+            y = random.randint(margin, height - margin - 1)
+            pos = (x, y)
+            if pos not in safe_zones and pos not in survivors:
+                debris.append(pos)
+        
+        agent_positions = {
+            'explorer': (margin + 1, margin),
+            'rescue': (margin, margin + 1),
+            'support': (margin + 1, margin + 1)
+        }
+        
+        return {
+            'width': width,
+            'height': height,
+            'safe_zones': safe_zones,
+            'survivors': survivors,
+            'fires': fires,
+            'floods': floods,
+            'debris': debris,
+            'agent_positions': agent_positions,
+            'seed': self.seed,
+            'difficulty': 'custom',
+            'hazard_density': hazard_density
+        }

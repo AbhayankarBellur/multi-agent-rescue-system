@@ -398,6 +398,7 @@ class SupportAgent(BaseAgent):
             self.logger.log_action(
                 self.agent_id,
                 "SUPPRESS_HAZARD",
+                self.position,
                 f"Suppressing hazards at {self.position} for 5 timesteps (risk: {local_risk:.2f})"
             )
             

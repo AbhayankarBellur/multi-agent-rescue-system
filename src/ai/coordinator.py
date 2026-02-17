@@ -59,10 +59,15 @@ class EnvironmentalAssessment:
         
         Returns:
             "LOW", "MODERATE", or "HIGH"
+            
+        Thresholds adjusted for realistic scenarios:
+        - LOW: avg_risk < 0.2 (very safe)
+        - MODERATE: avg_risk 0.2-0.5 (manageable risk)
+        - HIGH: avg_risk > 0.5 (dangerous)
         """
-        if self.avg_risk < 0.3 and self.risk_variance < 0.1:
+        if self.avg_risk < 0.2 and self.risk_variance < 0.08:
             return "LOW"
-        elif self.avg_risk < 0.6 and self.max_risk < 0.8:
+        elif self.avg_risk < 0.5 and self.max_risk < 0.7:
             return "MODERATE"
         else:
             return "HIGH"

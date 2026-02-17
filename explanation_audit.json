@@ -1,5 +1,30 @@
 {
-  "total_decisions": 0,
-  "export_timestamp": "2026-02-17T09:18:14.839218",
-  "explanations": []
+  "total_decisions": 1,
+  "export_timestamp": "2026-02-17T10:03:45.849596",
+  "explanations": [
+    {
+      "decision_type": "coordination_mode_switch",
+      "timestamp": 0,
+      "explanation": "Switched from CENTRALIZED to AUCTION: Moderate risk (0.23) requires distributed auction-based allocation",
+      "confidence": {
+        "mean": 0.23050000000000004,
+        "lower": 0.23050000000000004,
+        "upper": 0.23050000000000004,
+        "std_dev": 0.0,
+        "confidence": 0.95
+      },
+      "factors": {
+        "average_risk": 0.23050000000000004,
+        "risk_std_dev": 0.0,
+        "old_mode": "CENTRALIZED",
+        "new_mode": "AUCTION",
+        "decision_threshold_low": 0.3,
+        "decision_threshold_high": 0.7
+      },
+      "alternatives": [],
+      "chosen_action": "Switch to AUCTION",
+      "expected_outcome": "Coordination efficiency optimized for 0.23 risk level",
+      "actual_outcome": null
+    }
+  ]
 }

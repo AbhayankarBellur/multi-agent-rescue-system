@@ -87,6 +87,10 @@ class Renderer:
         self.show_agent_paths = True
         self.show_labels = True
         
+        # Explainability tracking
+        self.last_explanation = None
+        self.explanation_history = []
+        
         self.logger = get_logger()
     
     def render(self, grid, agents: List, risk_model, timestep: int):
@@ -119,6 +123,7 @@ class Renderer:
         self._render_status_panel(timestep, grid, agents)
         self._render_agent_info_panel(agents)
         self._render_log_panel()
+        self._render_explanation_panel()  # NEW: Explainability display
         
         # Render controls
         self._render_controls()
@@ -475,6 +480,109 @@ class Renderer:
                 return None
         
         return None
+    
+    def _render_explanation_panel(self):
+        """
+        Render explainability panel showing recent decisions.
+        
+        NEW v2.1: Natural language explanations for coordination decisions
+        """
+        panel_x = self.grid_width + 30
+        panel_y = 600
+        panel_width = 350
+        panel_height = 150
+        
+        # Background
+        pygame.draw.rect(self.screen, (40, 40, 50),
+                        (panel_x - 5, panel_y - 5, panel_width, panel_height))
+        pygame.draw.rect(self.screen, (100, 100, 120),
+                        (panel_x - 5, panel_y - 5, panel_width, panel_height), 2)
+        
+        # Title
+        title = self.font_normal.render("Decision Explanation", True, (255, 255, 100))
+        self.screen.blit(title, (panel_x, panel_y))
+        panel_y += 25
+        
+        if self.last_explanation:
+            # Store in history
+            if not self.explanation_history or self.explanation_history[-1] != self.last_explanation:
+                self.explanation_history.append(self.last_explanation)
+                if len(self.explanation_history) > 10:
+                    self.explanation_history.pop(0)
+            
+            # Decision type
+            decision_type = self.last_explanation.decision_type.value.replace('_', ' ').title()
+            type_text = self.font_small.render(f"Type: {decision_type}", True, (200, 200, 255))
+            self.screen.blit(type_text, (panel_x, panel_y))
+            panel_y += 18
+            
+            # Primary explanation (wrapped)
+            explanation = self.last_explanation.primary_explanation
+            lines = self._wrap_text(explanation, 45)
+            for line in lines[:3]:  # Max 3 lines
+                text = self.font_small.render(line, True, (220, 220, 220))
+                self.screen.blit(text, (panel_x, panel_y))
+                panel_y += 15
+            
+            panel_y += 5
+            
+            # Confidence with color coding
+            confidence = self.last_explanation.confidence
+            conf_value = confidence.mean
+            
+            # Color based on confidence
+            if conf_value < 0.3:
+                conf_color = (100, 255, 100)  # Green = low risk/high confidence
+            elif conf_value < 0.6:
+                conf_color = (255, 255, 100)  # Yellow = medium
+            else:
+                conf_color = (255, 100, 100)  # Red = high risk/low confidence
+            
+            conf_text = f"Confidence: {conf_value:.2f}"
+            text = self.font_small.render(conf_text, True, conf_color)
+            self.screen.blit(text, (panel_x, panel_y))
+            panel_y += 15
+            
+            # Confidence interval
+            ci_text = f"95% CI: [{confidence.lower_bound:.2f}, {confidence.upper_bound:.2f}]"
+            text = self.font_small.render(ci_text, True, (180, 180, 180))
+            self.screen.blit(text, (panel_x, panel_y))
+            
+        else:
+            # No explanation yet
+            no_exp_text = self.font_small.render("Waiting for coordination decision...", True, (150, 150, 150))
+            self.screen.blit(no_exp_text, (panel_x, panel_y))
+    
+    def _wrap_text(self, text: str, max_chars: int) -> List[str]:
+        """
+        Wrap text to fit within character limit.
+        
+        Args:
+            text: Text to wrap
+            max_chars: Maximum characters per line
+            
+        Returns:
+            List of wrapped lines
+        """
+        words = text.split()
+        lines = []
+        current_line = []
+        current_length = 0
+        
+        for word in words:
+            if current_length + len(word) + 1 <= max_chars:
+                current_line.append(word)
+                current_length += len(word) + 1
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+                current_length = len(word)
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        return lines
     
     def cleanup(self):
         """Clean up pygame resources."""

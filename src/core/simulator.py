@@ -46,7 +46,7 @@ class Simulator:
     - Handle UI and user input
     """
     
-    def __init__(self, seed: Optional[int] = None, coordination_mode: Optional[str] = None, enable_spawning: bool = True):
+    def __init__(self, seed: Optional[int] = None, coordination_mode: Optional[str] = None, enable_spawning: bool = True, verbose: bool = True, difficulty: Optional[str] = None):
         """
         Initialize simulator.
         
@@ -54,12 +54,16 @@ class Simulator:
             seed: Random seed for determinism
             coordination_mode: Force coordination mode ('centralized', 'auction', 'coalition', 'hybrid'/None)
             enable_spawning: Enable dynamic agent spawning
+            verbose: Enable explainability and detailed logging
+            difficulty: Scenario difficulty ('easy', 'medium', 'hard', 'extreme', 'nightmare')
         """
         self.seed = seed or SIMULATION.RANDOM_SEED
         self.timestep = 0
         self.paused = False
         self.running = True
         self.enable_spawning = enable_spawning
+        self.verbose = verbose  # Enable explainability by default
+        self.difficulty = difficulty  # Scenario difficulty
         
         # Parse coordination mode
         if coordination_mode:
@@ -102,9 +106,15 @@ class Simulator:
         self.logger._write("INITIALIZING SIMULATION", "MINIMAL")
         self.logger._write("="*80, "MINIMAL")
         
-        # Generate scenario
+        # Generate scenario based on difficulty
         scenario_gen = ScenarioGenerator(self.seed)
-        scenario = scenario_gen.generate_standard_scenario()
+        
+        if self.difficulty:
+            scenario = scenario_gen.generate_scenario_by_difficulty(self.difficulty)
+            self.logger.log_metric("Scenario", f"Difficulty={self.difficulty.upper()}")
+        else:
+            scenario = scenario_gen.generate_standard_scenario()
+            self.logger.log_metric("Scenario", "Standard")
         
         # Initialize grid
         self.grid = Grid(
@@ -312,10 +322,14 @@ class Simulator:
                 risk_confidence=risk_confidence
             )
             
-            # Log explanation if available (NEW v2.1)
-            if self.coordinator.last_explanation and self.verbose:
+            # Log explanation if available (NEW v2.1 - ENABLED)
+            if self.coordinator.last_explanation:
                 explanation_text = self.coordinator.last_explanation.to_natural_language()
-                self.logger.log(f"\n--- COORDINATION DECISION ---\n{explanation_text}\n", "VERBOSE")
+                self.logger._write(f"\n--- COORDINATION DECISION ---\n{explanation_text}\n", "NORMAL")
+                
+                # Store for GUI display
+                if self.renderer:
+                    self.renderer.last_explanation = self.coordinator.last_explanation
             
             # Allocate tasks using selected protocol
             allocation = self.coordinator.allocate_tasks(
