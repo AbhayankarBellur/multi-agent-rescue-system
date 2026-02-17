@@ -6,13 +6,17 @@ Theoretical Foundation:
 - Maintains prior probability distributions
 - Updates beliefs based on observations (Bayesian updating)
 - Provides risk estimates for decision making
+- Quantifies uncertainty with confidence intervals (NEW v2.1)
 
 This is NOT a predictor - it's a belief tracker that quantifies uncertainty.
+
+Patent Integration: Enhanced with explainability module for confidence intervals
 """
 
 from typing import Dict, Tuple, Optional
 import math
 from ..utils.config import AI, HAZARD
+from .explainability import ConfidenceInterval
 
 
 class BayesianRiskModel:
@@ -487,3 +491,147 @@ class BayesianRiskModel:
             prob_safe *= prob_safe_step
         
         return prob_safe
+    
+    def get_risk_with_confidence(
+        self,
+        position: Tuple[int, int],
+        risk_type: str = "combined"
+    ) -> ConfidenceInterval:
+        """
+        Get risk estimate with uncertainty quantification.
+        
+        NEW v2.1 - Patent Component: Explainable Risk Assessment
+        
+        Args:
+            position: Cell coordinates
+            risk_type: "fire", "flood", "collapse", or "combined"
+            
+        Returns:
+            ConfidenceInterval with mean risk and 95% bounds
+        """
+        # Get point estimate
+        mean_risk = self.get_risk(position, risk_type)
+        
+        # Compute uncertainty based on observation count
+        obs_count = self.observation_count.get(position, 0)
+        
+        # Standard deviation decreases with more observations
+        # Initial std_dev = 0.3, converges to 0.05 with many observations
+        base_std = 0.3
+        min_std = 0.05
+        std_dev = base_std * math.exp(-obs_count / 10.0) + min_std
+        
+        # Compute 95% confidence interval (1.96 * std_dev)
+        lower = max(0.0, mean_risk - 1.96 * std_dev)
+        upper = min(1.0, mean_risk + 1.96 * std_dev)
+        
+        return ConfidenceInterval(
+            mean=mean_risk,
+            lower_bound=lower,
+            upper_bound=upper,
+            std_dev=std_dev,
+            confidence_level=0.95
+        )
+    
+    def predict_risk_with_confidence(
+        self,
+        position: Tuple[int, int],
+        timesteps_ahead: int,
+        grid,
+        hazard_spread_enabled: bool = True
+    ) -> ConfidenceInterval:
+        """
+        Predict future risk with uncertainty quantification.
+        
+        NEW v2.1 - Patent Component: Temporal Risk Forecasting with Confidence
+        
+        Args:
+            position: Cell to predict risk for
+            timesteps_ahead: Number of timesteps to predict forward
+            grid: Grid object for neighbor information
+            hazard_spread_enabled: Whether hazards are spreading
+            
+        Returns:
+            ConfidenceInterval with predicted risk and uncertainty bounds
+        """
+        # Get point prediction
+        mean_risk = self.predict_risk(position, timesteps_ahead, grid, hazard_spread_enabled)
+        
+        # Uncertainty increases with prediction horizon
+        obs_count = self.observation_count.get(position, 0)
+        
+        # Base uncertainty from observations
+        base_std = 0.3 * math.exp(-obs_count / 10.0) + 0.05
+        
+        # Additional uncertainty from temporal prediction
+        # Uncertainty grows with prediction horizon: std += 0.05 per timestep
+        temporal_uncertainty = 0.05 * timesteps_ahead
+        
+        # Combined uncertainty
+        std_dev = min(0.5, base_std + temporal_uncertainty)  # Cap at 0.5
+        
+        # Compute 95% confidence interval
+        lower = max(0.0, mean_risk - 1.96 * std_dev)
+        upper = min(1.0, mean_risk + 1.96 * std_dev)
+        
+        return ConfidenceInterval(
+            mean=mean_risk,
+            lower_bound=lower,
+            upper_bound=upper,
+            std_dev=std_dev,
+            confidence_level=0.95
+        )
+    
+    def get_environmental_assessment_with_confidence(
+        self,
+        all_risks: list[float]
+    ) -> Tuple[float, ConfidenceInterval]:
+        """
+        Compute average environmental risk with confidence interval.
+        
+        NEW v2.1 - Patent Component: Used by HybridCoordinator for mode selection
+        
+        Args:
+            all_risks: List of risk values across environment
+            
+        Returns:
+            Tuple of (mean_risk, confidence_interval)
+        """
+        if not all_risks:
+            # No data - return prior with high uncertainty
+            mean_risk = (self.prior_fire + self.prior_flood + self.prior_collapse) / 3.0
+            return mean_risk, ConfidenceInterval(
+                mean=mean_risk,
+                lower_bound=0.0,
+                upper_bound=1.0,
+                std_dev=0.5,
+                confidence_level=0.95
+            )
+        
+        # Compute sample statistics
+        n = len(all_risks)
+        mean = sum(all_risks) / n
+        
+        # Sample standard deviation
+        if n > 1:
+            variance = sum((r - mean)**2 for r in all_risks) / (n - 1)
+            std_dev = math.sqrt(variance)
+        else:
+            std_dev = 0.3  # High uncertainty with single sample
+        
+        # Standard error of the mean
+        std_error = std_dev / math.sqrt(n)
+        
+        # 95% confidence interval for the mean
+        lower = max(0.0, mean - 1.96 * std_error)
+        upper = min(1.0, mean + 1.96 * std_error)
+        
+        confidence = ConfidenceInterval(
+            mean=mean,
+            lower_bound=lower,
+            upper_bound=upper,
+            std_dev=std_error,
+            confidence_level=0.95
+        )
+        
+        return mean, confidence

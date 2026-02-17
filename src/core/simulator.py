@@ -145,10 +145,11 @@ class Simulator:
             enable_broadcast=True
         )
         
-        # Initialize hybrid coordinator
+        # Initialize hybrid coordinator (with explainability enabled by default)
         self.coordinator = HybridCoordinator(
             self.csp_allocator,
-            self.comm_network
+            self.comm_network,
+            enable_explanations=True  # NEW v2.1: Enable explainability by default
         )
         
         # Initialize dynamic spawner
@@ -295,20 +296,26 @@ class Simulator:
         }
         
         if survivors:
-            # Assess environment for protocol selection
-            assessment = self.coordinator.assess_environment(
+            # Assess environment for protocol selection (now with confidence intervals)
+            assessment, risk_confidence = self.coordinator.assess_environment(
                 self.risk_model,
                 survivors,
                 agent_info,
                 self.grid
             )
             
-            # Select coordination mode
+            # Select coordination mode (with explanation generation)
             selected_mode = self.coordinator.select_mode(
                 assessment,
                 self.timestep,
-                force_mode=self.force_mode
+                force_mode=self.force_mode,
+                risk_confidence=risk_confidence
             )
+            
+            # Log explanation if available (NEW v2.1)
+            if self.coordinator.last_explanation and self.verbose:
+                explanation_text = self.coordinator.last_explanation.to_natural_language()
+                self.logger.log(f"\n--- COORDINATION DECISION ---\n{explanation_text}\n", "VERBOSE")
             
             # Allocate tasks using selected protocol
             allocation = self.coordinator.allocate_tasks(
@@ -430,6 +437,24 @@ class Simulator:
         
         # Cleanup
         self.renderer.cleanup()
+        
+        # NEW v2.1: Generate explainability report
+        if self.coordinator and self.coordinator.explanation_engine:
+            self.logger._write("\n" + "="*80, "MINIMAL")
+            self.logger._write("DECISION EXPLAINABILITY REPORT (v2.1)", "MINIMAL")
+            self.logger._write("="*80, "MINIMAL")
+            
+            # Generate summary report
+            summary_report = self.coordinator.explanation_engine.generate_summary_report()
+            self.logger._write(summary_report, "MINIMAL")
+            
+            # Export full audit trail to JSON (for regulatory compliance)
+            try:
+                audit_filepath = "explanation_audit.json"
+                self.coordinator.explanation_engine.export_audit_trail(audit_filepath)
+                self.logger._write(f"\n[SAVED] Full audit trail exported to: {audit_filepath}", "MINIMAL")
+            except Exception as e:
+                self.logger._write(f"\n[WARNING] Could not export audit trail: {e}", "MINIMAL")
         
         self.logger._write("\n" + "="*80, "MINIMAL")
         self.logger._write("SIMULATION ENDED", "MINIMAL")

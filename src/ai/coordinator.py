@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
 import statistics
+from .explainability import ExplanationEngine, DecisionExplanation
 
 
 class CoordinationMode(Enum):
@@ -97,13 +98,14 @@ class HybridCoordinator:
     between centralized, auction, and coalition modes.
     """
     
-    def __init__(self, csp_allocator, communication_network=None):
+    def __init__(self, csp_allocator, communication_network=None, enable_explanations=True):
         """
         Initialize hybrid coordinator.
         
         Args:
             csp_allocator: CSPAllocator instance
             communication_network: Communication network (optional)
+            enable_explanations: Enable explainability features (NEW v2.1)
         """
         self.csp_allocator = csp_allocator
         self.communication_network = communication_network
@@ -116,6 +118,10 @@ class HybridCoordinator:
             CoordinationMode.AUCTION: [],
             CoordinationMode.COALITION: []
         }
+        
+        # NEW v2.1: Explainability engine for decision transparency
+        self.explanation_engine = ExplanationEngine(enable_logging=enable_explanations) if enable_explanations else None
+        self.last_explanation: Optional[DecisionExplanation] = None
     
     def assess_environment(
         self,
@@ -123,9 +129,11 @@ class HybridCoordinator:
         survivors: List[Tuple[int, int]],
         agents: Dict[str, Any],
         grid
-    ) -> EnvironmentalAssessment:
+    ) -> Tuple[EnvironmentalAssessment, Optional[Any]]:
         """
-        Assess current environmental conditions.
+        Assess current environmental conditions with uncertainty quantification.
+        
+        ENHANCED v2.1: Now returns confidence intervals for risk assessment
         
         Args:
             risk_model: Bayesian risk model
@@ -134,22 +142,29 @@ class HybridCoordinator:
             grid: Environment grid
             
         Returns:
-            EnvironmentalAssessment object
+            Tuple of (EnvironmentalAssessment, confidence_interval)
         """
-        # Compute risk statistics
+        # Compute risk statistics with confidence intervals (NEW v2.1)
         risk_values = []
         for survivor_pos in survivors:
             risk = risk_model.get_risk(survivor_pos, "combined")
             risk_values.append(risk)
         
-        if risk_values:
+        # Get confidence interval for average risk
+        if risk_values and hasattr(risk_model, 'get_environmental_assessment_with_confidence'):
+            avg_risk, confidence_interval = risk_model.get_environmental_assessment_with_confidence(risk_values)
+            max_risk = max(risk_values)
+            risk_variance = statistics.variance(risk_values) if len(risk_values) > 1 else 0.0
+        elif risk_values:
             avg_risk = statistics.mean(risk_values)
             max_risk = max(risk_values)
             risk_variance = statistics.variance(risk_values) if len(risk_values) > 1 else 0.0
+            confidence_interval = None
         else:
             avg_risk = 0.0
             max_risk = 0.0
             risk_variance = 0.0
+            confidence_interval = None
         
         # Count agents
         rescue_agent_count = sum(
@@ -170,7 +185,7 @@ class HybridCoordinator:
         total_cells = grid.width * grid.height
         exploration_coverage = explored_cells / total_cells if total_cells > 0 else 0.0
         
-        return EnvironmentalAssessment(
+        assessment = EnvironmentalAssessment(
             avg_risk=avg_risk,
             max_risk=max_risk,
             risk_variance=risk_variance,
@@ -179,20 +194,26 @@ class HybridCoordinator:
             task_complexity=task_complexity,
             exploration_coverage=exploration_coverage
         )
+        
+        return assessment, confidence_interval
     
     def select_mode(
         self,
         assessment: EnvironmentalAssessment,
         timestep: int,
-        force_mode: Optional[CoordinationMode] = None
+        force_mode: Optional[CoordinationMode] = None,
+        risk_confidence=None
     ) -> CoordinationMode:
         """
         Select coordination mode based on environmental assessment.
+        
+        ENHANCED v2.1: Generates natural language explanations for mode switches
         
         Args:
             assessment: Environmental assessment
             timestep: Current simulation timestep
             force_mode: Override automatic selection (for testing)
+            risk_confidence: ConfidenceInterval for risk (NEW v2.1)
             
         Returns:
             Selected CoordinationMode
@@ -207,6 +228,27 @@ class HybridCoordinator:
         # Log mode change
         if selected != self.current_mode:
             self.mode_history.append((timestep, selected, reason))
+            
+            # NEW v2.1: Generate explanation for mode switch
+            if self.explanation_engine:
+                old_mode_str = self.current_mode.value.upper() if self.current_mode else "NONE"
+                new_mode_str = selected.value.upper()
+                
+                # Get risk statistics for explanation
+                if risk_confidence:
+                    risk_std = risk_confidence.std_dev
+                else:
+                    risk_std = assessment.risk_variance ** 0.5  # Convert variance to std dev
+                
+                explanation = self.explanation_engine.explain_mode_switch(
+                    old_mode=old_mode_str,
+                    new_mode=new_mode_str,
+                    avg_risk=assessment.avg_risk,
+                    risk_std=risk_std,
+                    timestamp=timestep
+                )
+                
+                self.last_explanation = explanation
         
         self.current_mode = selected
         return selected
