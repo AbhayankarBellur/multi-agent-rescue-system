@@ -93,7 +93,7 @@ class Renderer:
         
         self.logger = get_logger()
     
-    def render(self, grid, agents: List, risk_model, timestep: int):
+    def render(self, grid, agents: List, risk_model, timestep: int, coordinator=None, initial_survivors: int = 0):
         """
         Render complete frame.
         
@@ -102,6 +102,8 @@ class Renderer:
             agents: List of agent objects
             risk_model: Bayesian risk model
             timestep: Current timestep
+            coordinator: Hybrid coordinator (for protocol display)
+            initial_survivors: Initial survivor count (for accurate display)
         """
         # Clear screen
         self.screen.fill(UI.COLOR_BACKGROUND)
@@ -116,11 +118,20 @@ class Renderer:
         # Render agents and paths
         self._render_agents(grid, agents)
         
+        # NEW: Render communication ranges (if enabled)
+        if self.show_agent_paths:  # Reuse path toggle for communication
+            self._render_communication_ranges(agents)
+        
         # Blit grid to screen
         self.screen.blit(self.grid_surface, (10, 10))
         
+        # NEW: Render protocol indicator (top-left overlay on grid)
+        if coordinator:
+            self._render_protocol_indicator(coordinator, timestep)
+            self._render_risk_indicator(risk_model, grid)
+        
         # Render UI panels
-        self._render_status_panel(timestep, grid, agents)
+        self._render_status_panel(timestep, grid, agents, initial_survivors)
         self._render_agent_info_panel(agents)
         self._render_log_panel()
         self._render_explanation_panel()  # NEW: Explainability display
@@ -299,8 +310,8 @@ class Renderer:
             return UI.COLOR_SUPPORT
         return (255, 255, 255)
     
-    def _render_status_panel(self, timestep: int, grid, agents):
-        """Render status panel with simulation info."""
+    def _render_status_panel(self, timestep: int, grid, agents, initial_survivors: int = 0):
+        """Render status panel with simulation info and performance metrics."""
         panel_x = self.grid_width + 30
         panel_y = 20
         
@@ -308,6 +319,29 @@ class Renderer:
         text = self.font_large.render(f"Timestep: {timestep}", True, UI.COLOR_TEXT)
         self.screen.blit(text, (panel_x, panel_y))
         panel_y += 30
+        
+        # Performance Metrics (FIXED: Use initial_survivors parameter)
+        rescued_count = sum(a.survivors_rescued for a in agents)
+        
+        # Use initial_survivors if provided, otherwise calculate (fallback)
+        if initial_survivors > 0:
+            total_survivors = initial_survivors
+        else:
+            # Fallback: calculate from current state
+            current_survivors = grid.get_grid_state_summary()['survivors']
+            total_survivors = current_survivors + rescued_count
+        
+        perf_lines = [
+            f"Rescued: {rescued_count}/{total_survivors}",
+            f"Agents: {len(agents)}",
+        ]
+        
+        for line in perf_lines:
+            text = self.font_normal.render(line, True, (100, 255, 100))  # Green for metrics
+            self.screen.blit(text, (panel_x, panel_y))
+            panel_y += 20
+        
+        panel_y += 5
         
         # Grid state
         state = grid.get_grid_state_summary()
@@ -400,33 +434,38 @@ class Renderer:
                 break
     
     def _render_legend(self, panel_x: int, panel_y: int):
-        """Render agent type legend with shapes."""
+        """Render enhanced legend with agent types and protocol modes."""
         # Title
-        title = self.font_large.render("Agent Legend", True, UI.COLOR_TEXT)
+        title = self.font_large.render("Legend", True, UI.COLOR_TEXT)
         self.screen.blit(title, (panel_x, panel_y))
-        panel_y += 30
+        panel_y += 25
+        
+        # Agent Types Section
+        subtitle = self.font_normal.render("Agent Types:", True, (200, 200, 200))
+        self.screen.blit(subtitle, (panel_x, panel_y))
+        panel_y += 20
         
         # Legend entries with shapes
         legend_items = [
-            ("EXPLORER", UI.COLOR_EXPLORER, "circle", "Explores & maps area"),
-            ("RESCUE", UI.COLOR_RESCUE, "square", "Rescues survivors"),
-            ("SUPPORT", UI.COLOR_SUPPORT, "triangle", "Coordinates team"),
+            ("EXPLORER", UI.COLOR_EXPLORER, "circle", "Maps area"),
+            ("RESCUE", UI.COLOR_RESCUE, "square", "Saves survivors"),
+            ("SUPPORT", UI.COLOR_SUPPORT, "triangle", "Coordinates"),
         ]
         
-        shape_size = 10
+        shape_size = 8
         
         for agent_type, color, shape, description in legend_items:
             # Draw shape
             shape_x = panel_x + 10
-            shape_y = panel_y + 10
+            shape_y = panel_y + 8
             
             if shape == "circle":
                 pygame.draw.circle(self.screen, color, (shape_x, shape_y), shape_size)
-                pygame.draw.circle(self.screen, (255, 255, 255), (shape_x, shape_y), shape_size, 2)
+                pygame.draw.circle(self.screen, (255, 255, 255), (shape_x, shape_y), shape_size, 1)
             elif shape == "square":
                 rect = pygame.Rect(shape_x - shape_size, shape_y - shape_size, shape_size * 2, shape_size * 2)
                 pygame.draw.rect(self.screen, color, rect)
-                pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
+                pygame.draw.rect(self.screen, (255, 255, 255), rect, 1)
             elif shape == "triangle":
                 points = [
                     (shape_x, shape_y - shape_size),
@@ -434,23 +473,44 @@ class Renderer:
                     (shape_x + shape_size, shape_y + shape_size),
                 ]
                 pygame.draw.polygon(self.screen, color, points)
-                pygame.draw.polygon(self.screen, (255, 255, 255), points, 2)
+                pygame.draw.polygon(self.screen, (255, 255, 255), points, 1)
             
             # Draw text
-            text = self.font_small.render(f"{agent_type}", True, color)
-            self.screen.blit(text, (shape_x + 20, shape_y - 8))
+            text = self.font_small.render(f"{agent_type}: {description}", True, UI.COLOR_TEXT)
+            self.screen.blit(text, (shape_x + 15, shape_y - 6))
             
-            # Draw description
-            desc_text = self.font_small.render(description, True, UI.COLOR_TEXT)
-            self.screen.blit(desc_text, (shape_x + 20, shape_y + 5))
+            panel_y += 20
+        
+        # Protocol Modes Section
+        panel_y += 10
+        subtitle = self.font_normal.render("Protocol Modes:", True, (200, 200, 200))
+        self.screen.blit(subtitle, (panel_x, panel_y))
+        panel_y += 20
+        
+        protocol_items = [
+            ("CENTRALIZED", (100, 255, 100), "Low risk"),
+            ("AUCTION", (255, 255, 100), "Moderate risk"),
+            ("COALITION", (255, 100, 100), "High risk"),
+        ]
+        
+        for mode, color, desc in protocol_items:
+            # Color box
+            box_x = panel_x + 10
+            box_y = panel_y + 2
+            pygame.draw.rect(self.screen, color, (box_x, box_y, 12, 12))
+            pygame.draw.rect(self.screen, (255, 255, 255), (box_x, box_y, 12, 12), 1)
             
-            panel_y += 35
+            # Text
+            text = self.font_small.render(f"{mode}: {desc}", True, UI.COLOR_TEXT)
+            self.screen.blit(text, (box_x + 18, box_y))
+            
+            panel_y += 18
     
     def _render_controls(self):
         """Render control instructions."""
         panel_y = self.window_height - 50
         
-        controls = "SPACE: Pause | R: Reset | Q: Quit | H: Toggle Risk Overlay"
+        controls = "SPACE: Pause | R: Reset | Q: Quit | H: Risk | P: Comm"
         text = self.font_small.render(controls, True, UI.COLOR_TEXT)
         text_rect = text.get_rect(center=(self.window_width // 2, panel_y))
         self.screen.blit(text, text_rect)
@@ -583,6 +643,225 @@ class Renderer:
             lines.append(' '.join(current_line))
         
         return lines
+    
+    def _render_protocol_indicator(self, coordinator, timestep: int):
+        """
+        Render protocol indicator showing current coordination mode.
+        
+        NEW v2.2: Visual feedback for hybrid coordination protocol
+        
+        Args:
+            coordinator: HybridCoordinator instance
+            timestep: Current timestep
+        """
+        # Get current mode
+        current_mode = coordinator.current_mode.value.upper()
+        
+        # Color coding by mode
+        mode_colors = {
+            'CENTRALIZED': (100, 255, 100),  # Green - safe, deterministic
+            'AUCTION': (255, 255, 100),      # Yellow - moderate, flexible
+            'COALITION': (255, 100, 100)     # Red - high-risk, collaborative
+        }
+        
+        color = mode_colors.get(current_mode, (255, 255, 255))
+        
+        # Position: Top-left of screen (over grid)
+        indicator_x = 20
+        indicator_y = 20
+        indicator_width = 280
+        indicator_height = 50
+        
+        # Background box
+        bg_rect = pygame.Rect(indicator_x, indicator_y, indicator_width, indicator_height)
+        pygame.draw.rect(self.screen, (0, 0, 0, 180), bg_rect)  # Semi-transparent black
+        pygame.draw.rect(self.screen, color, bg_rect, 3)  # Colored border
+        
+        # Mode text
+        mode_text = self.font_large.render(f"MODE: {current_mode}", True, color)
+        text_x = indicator_x + 10
+        text_y = indicator_y + 8
+        self.screen.blit(mode_text, (text_x, text_y))
+        
+        # Mode switch count
+        switch_count = len(coordinator.mode_history)
+        if switch_count > 0:
+            switch_text = self.font_small.render(f"Switches: {switch_count}", True, (200, 200, 200))
+            self.screen.blit(switch_text, (text_x, text_y + 28))
+        
+        # Mode switch timeline (below indicator)
+        if coordinator.mode_history:
+            self._render_mode_timeline(coordinator.mode_history, timestep, indicator_x, indicator_y + indicator_height + 10)
+    
+    def _render_mode_timeline(self, mode_history: List, current_timestep: int, start_x: int, start_y: int):
+        """
+        Render horizontal timeline showing mode switch history.
+        
+        Args:
+            mode_history: List of (timestep, mode, reason) tuples
+            current_timestep: Current simulation timestep
+            start_x: X position to start timeline
+            start_y: Y position to start timeline
+        """
+        if not mode_history:
+            return
+        
+        # Timeline parameters
+        timeline_width = 400
+        timeline_height = 30
+        circle_radius = 8
+        
+        # Background
+        bg_rect = pygame.Rect(start_x, start_y, timeline_width, timeline_height)
+        pygame.draw.rect(self.screen, (30, 30, 40), bg_rect)
+        pygame.draw.rect(self.screen, (100, 100, 120), bg_rect, 1)
+        
+        # Title
+        title = self.font_small.render("Mode History:", True, (200, 200, 200))
+        self.screen.blit(title, (start_x + 5, start_y + 2))
+        
+        # Show last 10 switches
+        recent_history = mode_history[-10:]
+        
+        if len(recent_history) > 0:
+            # Calculate positions
+            spacing = min(35, (timeline_width - 100) // len(recent_history))
+            
+            for i, (ts, mode, reason) in enumerate(recent_history):
+                x_pos = start_x + 100 + (i * spacing)
+                y_pos = start_y + timeline_height // 2
+                
+                # Mode color
+                mode_colors = {
+                    'centralized': (100, 255, 100),
+                    'auction': (255, 255, 100),
+                    'coalition': (255, 100, 100)
+                }
+                color = mode_colors.get(mode.value if hasattr(mode, 'value') else mode, (255, 255, 255))
+                
+                # Draw circle
+                pygame.draw.circle(self.screen, color, (x_pos, y_pos), circle_radius)
+                pygame.draw.circle(self.screen, (255, 255, 255), (x_pos, y_pos), circle_radius, 2)
+                
+                # Draw connecting line to next
+                if i < len(recent_history) - 1:
+                    next_x = start_x + 100 + ((i + 1) * spacing)
+                    pygame.draw.line(self.screen, (100, 100, 120), (x_pos + circle_radius, y_pos), 
+                                   (next_x - circle_radius, y_pos), 2)
+                
+                # Timestamp label (below circle)
+                if i % 2 == 0:  # Only show every other to avoid crowding
+                    ts_text = self.font_small.render(f"T{ts}", True, (150, 150, 150))
+                    ts_rect = ts_text.get_rect(center=(x_pos, y_pos + 18))
+                    self.screen.blit(ts_text, ts_rect)
+    
+    def _render_risk_indicator(self, risk_model, grid):
+        """
+        Render risk level indicator showing current average risk.
+        
+        Args:
+            risk_model: Bayesian risk model
+            grid: Environment grid
+        """
+        # Position: Top-right of screen
+        indicator_x = self.window_width - 320
+        indicator_y = 20
+        indicator_width = 300
+        indicator_height = 60
+        
+        # Calculate average risk across all cells
+        total_risk = 0
+        cell_count = 0
+        max_risk = 0
+        
+        for x in range(grid.width):
+            for y in range(grid.height):
+                risk = risk_model.get_risk((x, y), "combined")
+                total_risk += risk
+                cell_count += 1
+                max_risk = max(max_risk, risk)
+        
+        avg_risk = total_risk / cell_count if cell_count > 0 else 0
+        
+        # Background
+        bg_rect = pygame.Rect(indicator_x, indicator_y, indicator_width, indicator_height)
+        pygame.draw.rect(self.screen, (0, 0, 0, 180), bg_rect)
+        pygame.draw.rect(self.screen, (150, 150, 150), bg_rect, 2)
+        
+        # Title
+        title = self.font_normal.render("Risk Level", True, (255, 255, 255))
+        self.screen.blit(title, (indicator_x + 10, indicator_y + 5))
+        
+        # Risk bar
+        bar_x = indicator_x + 10
+        bar_y = indicator_y + 30
+        bar_width = indicator_width - 20
+        bar_height = 20
+        
+        # Background bar
+        pygame.draw.rect(self.screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
+        
+        # Risk fill (gradient from green to red)
+        fill_width = int(bar_width * avg_risk)
+        
+        # Color based on risk level
+        if avg_risk < 0.2:
+            fill_color = (100, 255, 100)  # Green - LOW
+        elif avg_risk < 0.5:
+            fill_color = (255, 255, 100)  # Yellow - MODERATE
+        else:
+            fill_color = (255, 100, 100)  # Red - HIGH
+        
+        if fill_width > 0:
+            pygame.draw.rect(self.screen, fill_color, (bar_x, bar_y, fill_width, bar_height))
+        
+        # Border
+        pygame.draw.rect(self.screen, (200, 200, 200), (bar_x, bar_y, bar_width, bar_height), 2)
+        
+        # Threshold markers
+        # LOW threshold at 0.2
+        low_x = bar_x + int(bar_width * 0.2)
+        pygame.draw.line(self.screen, (100, 255, 100), (low_x, bar_y), (low_x, bar_y + bar_height), 2)
+        
+        # MODERATE threshold at 0.5
+        mod_x = bar_x + int(bar_width * 0.5)
+        pygame.draw.line(self.screen, (255, 255, 100), (mod_x, bar_y), (mod_x, bar_y + bar_height), 2)
+        
+        # Risk value text
+        risk_text = self.font_small.render(f"Avg: {avg_risk:.3f} | Max: {max_risk:.3f}", True, (220, 220, 220))
+        self.screen.blit(risk_text, (bar_x, bar_y + bar_height + 3))
+    
+    def _render_communication_ranges(self, agents):
+        """
+        Render communication ranges for agents.
+        
+        Args:
+            agents: List of agents
+        """
+        cell_size = GRID.CELL_SIZE
+        comm_range = 15  # cells (from communication network)
+        
+        for agent in agents:
+            x, y = agent.position
+            center = (
+                x * cell_size + cell_size // 2,
+                y * cell_size + cell_size // 2
+            )
+            
+            # Draw semi-transparent communication range circle
+            range_radius = int(comm_range * cell_size)
+            
+            # Create surface for transparency
+            comm_surface = pygame.Surface((range_radius * 2, range_radius * 2), pygame.SRCALPHA)
+            
+            # Draw circle on surface
+            color = self._get_agent_color(agent.agent_type)
+            pygame.draw.circle(comm_surface, (*color, 30), (range_radius, range_radius), range_radius)
+            pygame.draw.circle(comm_surface, (*color, 100), (range_radius, range_radius), range_radius, 1)
+            
+            # Blit to grid surface
+            self.grid_surface.blit(comm_surface, 
+                                  (center[0] - range_radius, center[1] - range_radius))
     
     def cleanup(self):
         """Clean up pygame resources."""

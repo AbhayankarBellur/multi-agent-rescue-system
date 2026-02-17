@@ -97,6 +97,7 @@ class Simulator:
         # Metrics
         self.total_survivors_rescued = 0
         self.total_cells_explored = 0
+        self.initial_survivors = 0  # Track initial survivor count
         
         self.logger.log_metric("Initialization", f"Seed={self.seed}")
     
@@ -124,8 +125,11 @@ class Simulator:
         )
         scenario_gen.apply_scenario_to_grid(self.grid, scenario)
         
+        # Store initial survivor count
+        self.initial_survivors = len(scenario['survivors'])
+        
         self.logger.log_metric("Grid size", f"{self.grid.width}x{self.grid.height}")
-        self.logger.log_metric("Initial survivors", len(scenario['survivors']))
+        self.logger.log_metric("Initial survivors", self.initial_survivors)
         self.logger.log_metric("Safe zones", len(scenario['safe_zones']))
         
         # Initialize risk model
@@ -210,7 +214,7 @@ class Simulator:
                 self.execute_timestep()
             
             # Render
-            self.renderer.render(self.grid, self.agents, self.risk_model, self.timestep)
+            self.renderer.render(self.grid, self.agents, self.risk_model, self.timestep, self.coordinator, self.initial_survivors)
             
             # Check win condition
             if len(self.grid.survivor_positions) == 0:
@@ -220,7 +224,7 @@ class Simulator:
                 self.logger._write("="*80, "MINIMAL")
                 
                 # Render final state one more time
-                self.renderer.render(self.grid, self.agents, self.risk_model, self.timestep)
+                self.renderer.render(self.grid, self.agents, self.risk_model, self.timestep, self.coordinator, self.initial_survivors)
                 pygame.display.flip()
                 
                 # Wait 3 seconds to show completion message, then exit
