@@ -1,0 +1,76 @@
+{
+  "timestamp": "2026-02-17T10:42:54.780735",
+  "results": [
+    {
+      "difficulty": "easy",
+      "seed": 42,
+      "timesteps": 29,
+      "max_timesteps": 100,
+      "duration_seconds": 4.75,
+      "initial_survivors": 5,
+      "survivors_rescued": 3,
+      "survivors_remaining": 0,
+      "rescue_rate": 0.6,
+      "agents_spawned": 0,
+      "final_agent_count": 6,
+      "mode_switches": 2,
+      "cells_explored": 0,
+      "final_fires": 13,
+      "final_floods": 12,
+      "completed": true,
+      "avg_timestep_duration": 0.1639
+    },
+    {
+      "difficulty": "easy",
+      "seed": 142,
+      "timesteps": 38,
+      "max_timesteps": 100,
+      "duration_seconds": 3.58,
+      "initial_survivors": 5,
+      "survivors_rescued": 4,
+      "survivors_remaining": 0,
+      "rescue_rate": 0.8,
+      "agents_spawned": 0,
+      "final_agent_count": 6,
+      "mode_switches": 4,
+      "cells_explored": 0,
+      "final_fires": 12,
+      "final_floods": 12,
+      "completed": true,
+      "avg_timestep_duration": 0.0941
+    }
+  ],
+  "summary": {
+    "by_difficulty": {
+      "easy": {
+        "runs": 2,
+        "rescue_rate": {
+          "mean": 0.7,
+          "min": 0.6,
+          "max": 0.8
+        },
+        "timesteps": {
+          "mean": 33.5,
+          "min": 29,
+          "max": 38
+        },
+        "agents_spawned": {
+          "mean": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "mode_switches": {
+          "mean": 3.0,
+          "min": 2,
+          "max": 4
+        }
+      }
+    },
+    "overall": {
+      "total_runs": 2,
+      "avg_rescue_rate": 0.7,
+      "min_rescue_rate": 0.6,
+      "max_rescue_rate": 0.8
+    }
+  }
+}

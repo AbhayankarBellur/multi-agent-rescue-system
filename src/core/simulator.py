@@ -407,6 +407,10 @@ class Simulator:
         # Increment timestep
         self.timestep += 1
     
+    def _execute_timestep(self):
+        """Alias for execute_timestep (used by benchmark suite for headless mode)."""
+        self.execute_timestep()
+    
     def reset(self):
         """Reset simulation to initial state."""
         self.logger._write("\n=== SIMULATION RESET ===\n", "MINIMAL")

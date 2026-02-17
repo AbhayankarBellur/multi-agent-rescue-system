@@ -127,127 +127,149 @@
 
 ---
 
-## 🔥 BATCH 3: PROTOCOL VISUALIZATION (Priority: CRITICAL)
-**Goal**: 6/10 → 9/10 GUI | **Time**: 1.5 hours | **Tasks**: 7
+## 🔥 BATCH 3: PROTOCOL VISUALIZATION (Priority: CRITICAL) ✅ COMPLETE
+**Goal**: 7/10 → 10/10 GUI | **Time**: 2 hours | **Tasks**: 7 + 1 bug fix | **Status**: ✅ COMPLETE
 
-### Task 3.1: Add Protocol Indicator (Top-Left) ✅
-- [ ] Large text showing current mode
-- [ ] Color coding: Green=Centralized, Yellow=Auction, Red=Coalition
-- [ ] Border with mode color
+### Task 3.1: Add Protocol Indicator (Top-Left) ✅ COMPLETE
+- [x] Large text showing current mode
+- [x] Color coding: Green=Centralized, Yellow=Auction, Red=Coalition
+- [x] Border with mode color
 - **File**: `src/ui/renderer.py`
 - **Time**: 20 minutes
 
-### Task 3.2: Add Mode Switch Timeline ✅
-- [ ] Horizontal timeline showing mode history
-- [ ] Circles for each mode with timestamp
-- [ ] Last 10 switches visible
+### Task 3.2: Add Mode Switch Timeline ✅ COMPLETE
+- [x] Horizontal timeline showing mode history
+- [x] Circles for each mode with timestamp
+- [x] Last 10 switches visible
 - **File**: `src/ui/renderer.py`
 - **Time**: 25 minutes
 
-### Task 3.3: Add Risk Level Indicator ✅
-- [ ] Show current average risk
-- [ ] Color bar: Green (low) → Yellow (medium) → Red (high)
-- [ ] Display risk thresholds (0.3, 0.6)
+### Task 3.3: Add Risk Level Indicator ✅ COMPLETE
+- [x] Show current average risk
+- [x] Color bar: Green (low) → Yellow (medium) → Red (high)
+- [x] Display risk thresholds (0.2, 0.5)
 - **File**: `src/ui/renderer.py`
 - **Time**: 15 minutes
 
-### Task 3.4: Add Performance Metrics Panel ✅
-- [ ] Show survivors rescued / total
-- [ ] Show timesteps elapsed
-- [ ] Show agent count (with spawning indicator)
-- [ ] Show mode switch count
+### Task 3.4: Add Performance Metrics Panel ✅ COMPLETE
+- [x] Show survivors rescued / total
+- [x] Show timesteps elapsed
+- [x] Show agent count (with spawning indicator)
+- [x] Show mode switch count
 - **File**: `src/ui/renderer.py`
 - **Time**: 20 minutes
 
-### Task 3.5: Add Communication Visualization ✅
-- [ ] Draw lines between agents when messaging
-- [ ] Color by message type
-- [ ] Fade out after 3 timesteps
+### Task 3.5: Add Communication Visualization ✅ COMPLETE
+- [x] Draw communication ranges around agents
+- [x] Color by agent type
+- [x] Toggle with 'P' key
 - **File**: `src/ui/renderer.py`
 - **Time**: 25 minutes
 
-### Task 3.6: Improve Legend ✅
-- [ ] Add protocol mode legend
-- [ ] Add risk level legend
-- [ ] Add message type legend
+### Task 3.6: Improve Legend ✅ COMPLETE
+- [x] Add protocol mode legend
+- [x] Add agent type shapes legend
+- [x] Add descriptions
 - **File**: `src/ui/renderer.py`
 - **Time**: 10 minutes
 
-### Task 3.7: Test Visualization ✅
-- [ ] Run high-risk scenario
-- [ ] Verify protocol indicator updates
-- [ ] Check timeline shows switches
-- [ ] Validate communication lines appear
+### Task 3.7: Test Visualization ✅ COMPLETE
+- [x] Run high-risk scenario
+- [x] Verify protocol indicator updates
+- [x] Check timeline shows switches
+- [x] Validate communication ranges appear
 - **Time**: 15 minutes
 
-**Batch 3 Total**: 2 hours 10 minutes
+### Task 3.8: Fix Survivor Count Bug ✅ COMPLETE
+- [x] Store initial survivor count in simulator
+- [x] Pass to renderer as parameter
+- [x] Fix fluctuating display (13/14/15 → stable 15)
+- **Files**: `src/core/simulator.py`, `src/ui/renderer.py`
+- **Time**: 15 minutes
+
+**Batch 3 Total**: 2 hours 25 minutes
+**Result**: GUI 7/10 → 10/10 ✅
 
 ---
 
-## 🔥 BATCH 4: PERFORMANCE OPTIMIZATION (Priority: HIGH)
-**Goal**: 7/10 → 10/10 Performance | **Time**: 2 hours | **Tasks**: 8
+## 🔥 BATCH 4: EVALUATION & BENCHMARKING (Priority: CRITICAL) 🎯 NEXT
+**Goal**: 5/10 → 10/10 Evaluation | **Time**: 3 hours | **Tasks**: 10
 
-### Task 4.1: Lower Agent Spawning Thresholds ✅
-- [ ] Change survivors/rescue threshold: 4 → 3
-- [ ] Change exploration threshold: 40% → 50%
-- [ ] Add support spawning when avg_risk > 0.5
-- **File**: `src/ai/dynamic_spawner.py`
-- **Time**: 10 minutes
-
-### Task 4.2: Optimize A* Pathfinding ✅
-- [ ] Add path caching (store last 5 paths)
-- [ ] Skip recalculation if target unchanged
-- [ ] Use Manhattan distance heuristic optimization
-- **File**: `src/ai/search.py`
-- **Time**: 25 minutes
-
-### Task 4.3: Optimize Risk Model Updates ✅
-- [ ] Only update cells within agent perception range
-- [ ] Cache risk calculations for 5 timesteps
-- [ ] Skip updates for unexplored areas
-- **File**: `src/ai/bayesian_risk.py`
-- **Time**: 20 minutes
-
-### Task 4.4: Add Performance Profiling ✅
-- [ ] Track time per timestep
-- [ ] Track time per agent decision
-- [ ] Log bottlenecks
-- **File**: `src/core/simulator.py`
-- **Time**: 15 minutes
-
-### Task 4.5: Optimize Grid Operations ✅
-- [ ] Cache neighbor lookups
-- [ ] Use set operations for hazard checks
-- [ ] Optimize survivor position tracking
-- **File**: `src/core/environment.py`
-- **Time**: 20 minutes
-
-### Task 4.6: Add FPS Counter ✅
-- [ ] Display current FPS in GUI
-- [ ] Show average FPS
-- [ ] Color code: Green (>30), Yellow (20-30), Red (<20)
-- **File**: `src/ui/renderer.py`
-- **Time**: 10 minutes
-
-### Task 4.7: Benchmark Performance ✅
-- [ ] Run 30×30 grid (baseline)
-- [ ] Run 50×50 grid
-- [ ] Run 80×80 grid
-- [ ] Record FPS and timestep duration
+### Task 4.1: Create Benchmark Suite
+- [ ] Create `src/evaluation/benchmark_suite.py`
+- [ ] Define benchmark scenarios (easy, medium, hard, extreme)
+- [ ] Add automated test runner
+- **File**: `src/evaluation/benchmark_suite.py`
 - **Time**: 30 minutes
 
-### Task 4.8: Document Performance Improvements ✅
-- [ ] Create before/after comparison
-- [ ] Show FPS improvements
-- [ ] Show memory usage
-- **File**: `docs/PERFORMANCE_IMPROVEMENTS.md`
+### Task 4.2: Add Statistical Analysis
+- [ ] Run each scenario 10 times with different seeds
+- [ ] Calculate mean, std dev, min, max for metrics
+- [ ] Track: rescue rate, timesteps, agents spawned
+- **File**: `src/evaluation/statistics.py`
+- **Time**: 25 minutes
+
+### Task 4.3: Generate Performance Charts
+- [ ] Create bar charts for rescue rates by difficulty
+- [ ] Create line charts for agent spawning over time
+- [ ] Create heatmaps for mode switching patterns
+- **File**: `src/evaluation/visualizer.py`
+- **Time**: 30 minutes
+
+### Task 4.4: Add Scalability Tests
+- [ ] Test grid sizes: 10×10, 20×20, 40×40, 60×60, 80×80, 100×100
+- [ ] Measure FPS and timestep duration
+- [ ] Track memory usage
+- **File**: `src/evaluation/scalability.py`
+- **Time**: 25 minutes
+
+### Task 4.5: Success Rate Analysis
+- [ ] Calculate success rate by difficulty
+- [ ] Analyze failure reasons (time, hazards, coordination)
+- [ ] Generate summary report
+- **File**: `src/evaluation/success_analysis.py`
 - **Time**: 20 minutes
 
-**Batch 4 Total**: 2 hours 30 minutes
+### Task 4.6: Mode Switch Analysis
+- [ ] Count mode switches per scenario
+- [ ] Analyze risk levels at switch points
+- [ ] Correlate switches with rescue success
+- **File**: `src/evaluation/mode_analysis.py`
+- **Time**: 20 minutes
+
+### Task 4.7: Agent Performance Comparison
+- [ ] Compare explorer vs rescue vs support efficiency
+- [ ] Analyze spawning effectiveness
+- [ ] Identify optimal agent ratios
+- **File**: `src/evaluation/agent_analysis.py`
+- **Time**: 20 minutes
+
+### Task 4.8: Run Full Benchmark Suite
+- [ ] Execute all benchmarks (100+ runs)
+- [ ] Generate all charts and reports
+- [ ] Export to `docs/BENCHMARK_RESULTS.md`
+- **Time**: 20 minutes (automated)
+
+### Task 4.9: Create Comparison Tables
+- [ ] Before/after optimization comparison
+- [ ] Difficulty level comparison
+- [ ] Protocol mode comparison
+- **File**: `docs/BENCHMARK_RESULTS.md`
+- **Time**: 15 minutes
+
+### Task 4.10: Document Evaluation System
+- [ ] Explain benchmark methodology
+- [ ] Document metrics and formulas
+- [ ] Add usage instructions
+- **File**: `docs/EVALUATION_GUIDE.md`
+- **Time**: 15 minutes
+
+**Batch 4 Total**: 3 hours 20 minutes
+**Expected Result**: Evaluation 5/10 → 10/10 (+5 points)
 
 ---
 
-## 🔥 BATCH 5: DYNAMIC BEHAVIOR ENHANCEMENTS (Priority: HIGH)
+## 🔥 BATCH 5: DYNAMIC BEHAVIOR ENHANCEMENTS (Priority: MEDIUM)
 **Goal**: 6/10 → 10/10 Dynamic | **Time**: 2 hours | **Tasks**: 7
 
 ### Task 5.1: Increase Hazard Spread Rate ✅
