@@ -141,13 +141,50 @@ python -m src.main_advanced --grid-size 80x60 --survivors 20 --difficulty hard -
 - Benchmark mode for performance metrics
 - Difficulty presets (easy/medium/hard/extreme)
 
-#### **Option 4: Evaluation Mode** 📊
+#### **Option 4: Complete Test Suite** 🎯 (NEW - Recommended for Full Analysis)
+```bash
+.\run_complete_test.bat
+```
+- Runs GUI simulation with HARD scenario (300 timesteps)
+- Executes comprehensive benchmark suite (all difficulties & protocols)
+- Generates complete performance reports and visualizations
+- **Time**: ~10-15 minutes
+- **Outputs**: NLP logs, benchmark results, performance analysis, charts
+
+**What You Get:**
+- `simulation_log.txt` - All agent NLP communications
+- `docs/BENCHMARK_RESULTS.md` - Performance report
+- `docs/PERFORMANCE_ANALYSIS.md` - Detailed metrics
+- `benchmark_results_[timestamp].json` - Raw data
+- Visualization charts
+
+**See:** `docs/OUTPUT_GUIDE.md` for complete output documentation
+
+#### **Option 5: Evaluation Mode** 📊
 ```bash
 python -m src.evaluation.evaluator
 ```
 - Runs 15 trials comparing all coordination protocols
 - Generates `evaluation_results.json` with detailed statistics
 - Perfect for research and performance analysis
+
+---
+
+## 📂 Output Locations
+
+After running simulations, find your results here:
+
+| Output Type | File Location | Description |
+|-------------|---------------|-------------|
+| **NLP Communications** | `simulation_log.txt` | All agent messages, decisions, coordination |
+| **Benchmark Results** | `benchmark_results_[timestamp].json` | Raw performance data (JSON) |
+| **Performance Report** | `docs/BENCHMARK_RESULTS.md` | Formatted benchmark report |
+| **Detailed Analysis** | `docs/PERFORMANCE_ANALYSIS.md` | In-depth performance metrics |
+| **Full Evaluation** | `docs/COMPREHENSIVE_EVALUATION.md` | Complete system evaluation |
+| **Visualizations** | Console output | Chart file paths printed during run |
+| **Complete Guide** | `docs/OUTPUT_GUIDE.md` | Detailed output documentation |
+
+**Quick Start:** Run `run_complete_test.bat` → Check `simulation_log.txt` for agent NLP → Review `docs/BENCHMARK_RESULTS.md` for performance
 
 ---
 

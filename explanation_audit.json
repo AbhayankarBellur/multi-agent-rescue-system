@@ -1,6 +1,6 @@
 {
-  "total_decisions": 1,
-  "export_timestamp": "2026-02-17T10:54:35.560628",
+  "total_decisions": 2,
+  "export_timestamp": "2026-02-24T21:29:04.663810",
   "explanations": [
     {
       "decision_type": "coordination_mode_switch",
@@ -24,6 +24,30 @@
       "alternatives": [],
       "chosen_action": "Switch to AUCTION",
       "expected_outcome": "Coordination efficiency optimized for 0.23 risk level",
+      "actual_outcome": null
+    },
+    {
+      "decision_type": "coordination_mode_switch",
+      "timestamp": 97,
+      "explanation": "Switched from AUCTION to COALITION: High risk (0.38) necessitates coalition formation for safety",
+      "confidence": {
+        "mean": 0.3844,
+        "lower": 0.08275600000000011,
+        "upper": 0.6860439999999999,
+        "std_dev": 0.15389999999999995,
+        "confidence": 0.95
+      },
+      "factors": {
+        "average_risk": 0.3844,
+        "risk_std_dev": 0.15389999999999995,
+        "old_mode": "AUCTION",
+        "new_mode": "COALITION",
+        "decision_threshold_low": 0.3,
+        "decision_threshold_high": 0.7
+      },
+      "alternatives": [],
+      "chosen_action": "Switch to COALITION",
+      "expected_outcome": "Coordination efficiency optimized for 0.38 risk level",
       "actual_outcome": null
     }
   ]
